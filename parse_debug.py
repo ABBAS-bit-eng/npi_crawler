@@ -1,26 +1,22 @@
 import re
 
-with open(r'C:\Users\Abbas\Documents\NPI_data\debug_Category_options.html', 'r', encoding='utf-8') as f:
+DEBUG_FILE = r'C:\Users\Abbas\Documents\NPI_data\debug_Category_options.html'
+
+with open(DEBUG_FILE, 'r', encoding='utf-8') as f:
     content = f.read()
 
-# Find all data-value attributes
-options = re.findall(r'data-value="([^"]+)"', content)
-print("All data-value attributes:")
-for o in options:
-    print(" ", o)
+# All data-value attributes
+print("data-value attributes:")
+for val in re.findall(r'data-value="([^"]+)"', content):
+    print(f"  {val}")
 
-# Find all role=option elements and nearby text
-option_blocks = re.findall(r'role="option"[^>]*>(.*?)</lightning-base-combobox-item>', content, re.DOTALL)
+# Text inside role=option blocks
 print("\nOption block texts:")
-for b in option_blocks[:30]:
-    text = re.sub(r'<[^>]+>', '', b).strip()
+for block in re.findall(r'role="option"[^>]*>(.*?)</lightning-base-combobox-item>', content, re.DOTALL)[:30]:
+    text = re.sub(r'<[^>]+>', '', block).strip()
     if text:
-        print(" ", text)
+        print(f"  {text}")
 
-# Find aria-label on combobox buttons
-labels = re.findall(r'aria-label="([^"]+)"[^>]*role="combobox"', content)
-print("\nCombobox aria-labels:", labels)
-
-# Find name attributes on comboboxes
-names = re.findall(r'name="([^"]+)"[^>]*role="combobox"', content)
-print("Combobox names:", names)
+# Combobox aria-labels and name attributes
+print("\nCombobox aria-labels:", re.findall(r'aria-label="([^"]+)"[^>]*role="combobox"', content))
+print("Combobox names:", re.findall(r'name="([^"]+)"[^>]*role="combobox"', content))
