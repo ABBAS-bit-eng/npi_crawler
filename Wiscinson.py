@@ -1,8 +1,5 @@
-import os
-import time
-import csv
+import os, time, csv
 from urllib.parse import urljoin
-
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -11,326 +8,178 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
 from webdriver_manager.chrome import ChromeDriverManager
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-URL        = "https://license.wi.gov/s/license-lookup"
-OUTPUT_CSV = "wisconsin_health_active_links.csv"
+URL = "https://license.wi.gov/s/license-lookup"
+OUT = "wisconsin_health_active_links.csv"
 
 PROFESSIONS = [
-    "Acupuncturist", "Advanced Practice Nurse Prescriber", "Anesthesiologist Assistant",
-    "Art Therapist", "Athletic Trainer", "Audiologist", "Behavior Analyst", "Body Piercer",
-    "Chiropractic Radiological Technician", "Chiropractic Technician", "Chiropractor",
-    "Clinical Substance Abuse Counselor", "Clinical Supervisor In-Training",
-    "Clinical Supervisor, Independent", "Clinical Supervisor, Intermediate",
+    "Acupuncturist","Advanced Practice Nurse Prescriber","Anesthesiologist Assistant",
+    "Art Therapist","Athletic Trainer","Audiologist","Behavior Analyst","Body Piercer",
+    "Chiropractic Radiological Technician","Chiropractic Technician","Chiropractor",
+    "Clinical Substance Abuse Counselor","Clinical Supervisor In-Training",
+    "Clinical Supervisor, Independent","Clinical Supervisor, Intermediate",
     "Controlled Substances Special Use Authorization",
     "Controlled Substances Special Use Authorization - Analytical Laboratory (450)",
-    "Dance Therapist", "Dental Hygienist", "Dental Therapist", "Dentist", "Dietitian",
-    "Expanded Function Dental Auxiliary", "Genetic Counselor", "Hearing Instrument Specialist",
-    "Licensed Practical Nurse", "Licensed Professional Counselor",
-    "Limited X-Ray Machine Operator Permit", "Limited-Scope Naturopathic Doctor",
-    "Marriage and Family Therapist", "Marriage and Family Therapist Training License",
-    "Massage Therapist or Bodywork Therapist", "Medicine and Surgery - DO",
-    "Medicine and Surgery - MD", "Midwives, Licensed", "Music Therapist",
-    "Naturopathic Doctor", "Nurse - Midwife", "Occupational Therapist",
-    "Occupational Therapy Assistant", "Optometrist", "Perfusionist", "Pharmacist",
-    "Pharmacy Technician", "Physical Therapist", "Physical Therapist Assistant",
-    "Physician - DO", "Physician - DO Compact", "Physician - MD", "Physician - MD Compact",
-    "Physician Assistant", "Podiatrist", "Prevention Specialist",
-    "Prevention Specialist In-Training", "Professional Counselor Training License",
-    "Provisional Physician Licensure", "Psychologist", "Radiographer, Licensed",
-    "Registered Nurse", "Registered Sanitarian", "Resident Educational License",
-    "Respiratory Care Practitioner", "Sign Language Interpreter - Advanced Deaf",
-    "Sign Language Interpreter - Advanced Hearing", "Sign Language Interpreter - Intermediate Deaf",
-    "Sign Language Interpreter - Intermediate Hearing", "Social Worker",
-    "Social Worker - Advanced Practice", "Social Worker - Independent",
-    "Social Worker - Licensed Clinical", "Social Worker - Training Certificate",
-    "Speech-Language Pathologist", "Substance Abuse Counselor",
-    "Substance Abuse Counselor In-Training", "Tattooist",
+    "Dance Therapist","Dental Hygienist","Dental Therapist","Dentist","Dietitian",
+    "Expanded Function Dental Auxiliary","Genetic Counselor","Hearing Instrument Specialist",
+    "Licensed Practical Nurse","Licensed Professional Counselor",
+    "Limited X-Ray Machine Operator Permit","Limited-Scope Naturopathic Doctor",
+    "Marriage and Family Therapist","Marriage and Family Therapist Training License",
+    "Massage Therapist or Bodywork Therapist","Medicine and Surgery - DO",
+    "Medicine and Surgery - MD","Midwives, Licensed","Music Therapist",
+    "Naturopathic Doctor","Nurse - Midwife","Occupational Therapist",
+    "Occupational Therapy Assistant","Optometrist","Perfusionist","Pharmacist",
+    "Pharmacy Technician","Physical Therapist","Physical Therapist Assistant",
+    "Physician - DO","Physician - DO Compact","Physician - MD","Physician - MD Compact",
+    "Physician Assistant","Podiatrist","Prevention Specialist","Prevention Specialist In-Training",
+    "Professional Counselor Training License","Provisional Physician Licensure","Psychologist",
+    "Radiographer, Licensed","Registered Nurse","Registered Sanitarian",
+    "Resident Educational License","Respiratory Care Practitioner",
+    "Sign Language Interpreter - Advanced Deaf","Sign Language Interpreter - Advanced Hearing",
+    "Sign Language Interpreter - Intermediate Deaf","Sign Language Interpreter - Intermediate Hearing",
+    "Social Worker","Social Worker - Advanced Practice","Social Worker - Independent",
+    "Social Worker - Licensed Clinical","Social Worker - Training Certificate",
+    "Speech-Language Pathologist","Substance Abuse Counselor",
+    "Substance Abuse Counselor In-Training","Tattooist",
 ]
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+W = None  # global driver
 
-def clear_wdm_lock():
-    """Remove stale webdriver-manager lock file if present."""
-    lock_path = os.path.join(os.path.expanduser("~"), ".wdm", ".wdm-lock-chromedriver-win64")
-    if os.path.exists(lock_path):
-        try:
-            os.remove(lock_path)
-            print("Cleared stale wdm lock file.")
-        except OSError as e:
-            print(f"Could not remove lock file: {e}")
-
-
-def js_click(driver, element):
-    """Scroll element into view and click via JavaScript."""
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
+def jclick(el):
+    W.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
     time.sleep(0.3)
-    driver.execute_script("arguments[0].click();", element)
+    W.execute_script("arguments[0].click();", el)
 
-
-def wait_for_table(driver, timeout=40):
-    """Wait until results table has rows or a no-results message appears."""
+def wait_table():
     try:
-        WebDriverWait(driver, timeout).until(
-            lambda d: (
-                d.find_elements(By.XPATH, "//table//tbody/tr") or
-                d.find_elements(By.XPATH, "//*[contains(text(),'No results') or contains(text(),'No records')]")
-            )
-        )
-    except TimeoutException:
-        pass
+        WebDriverWait(W, 40).until(lambda d:
+            d.find_elements(By.XPATH, "//table//tbody/tr") or
+            d.find_elements(By.XPATH, "//*[contains(text(),'No results') or contains(text(),'No records')]"))
+    except TimeoutException: pass
     time.sleep(1)
 
-
-def save_debug_html(driver, label):
-    """Save page source for debugging."""
-    filename = f"debug_{label[:30].replace(' ', '_')}.html"
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(driver.page_source)
-    print(f"  Debug HTML saved: {filename}")
-
-
-# ── Combobox helpers ──────────────────────────────────────────────────────────
-
-def open_combobox(driver, aria_label, timeout=20):
-    """Click a Salesforce LWC combobox button by its aria-label."""
-    xpaths = [
-        f"//button[@role='combobox' and @aria-label='{aria_label}']",
-        f"//button[@aria-haspopup='listbox' and @aria-label='{aria_label}']",
-        f"//label[normalize-space()='{aria_label}']/following::button[@aria-haspopup='listbox'][1]",
-        f"//*[normalize-space(text())='{aria_label}']/ancestor::*[contains(@class,'slds-form-element')]//button[@aria-haspopup='listbox']",
-    ]
-    for xp in xpaths:
+def open_combo(label):
+    for xp in [
+        f"//button[@role='combobox' and @aria-label='{label}']",
+        f"//button[@aria-haspopup='listbox' and @aria-label='{label}']",
+        f"//label[normalize-space()='{label}']/following::button[@aria-haspopup='listbox'][1]",
+        f"//*[normalize-space(text())='{label}']/ancestor::*[contains(@class,'slds-form-element')]//button[@aria-haspopup='listbox']",
+    ]:
         try:
-            btn = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.XPATH, xp)))
-            js_click(driver, btn)
-            return btn
-        except TimeoutException:
-            continue
-    raise TimeoutException(f"Cannot find combobox: '{aria_label}'")
+            btn = WebDriverWait(W, 20).until(EC.element_to_be_clickable((By.XPATH, xp)))
+            jclick(btn); return
+        except TimeoutException: continue
+    raise TimeoutException(f"Combobox not found: {label}")
 
-
-def pick_option(driver, option_text, timeout=15):
-    """Select an option from an open combobox by title or visible text."""
-    try:
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.find_elements(By.XPATH, "//*[@role='option']")
-        )
-    except TimeoutException:
-        pass
+def pick(text):
+    try: WebDriverWait(W, 15).until(lambda d: d.find_elements(By.XPATH, "//*[@role='option']"))
+    except TimeoutException: pass
     time.sleep(0.5)
-
-    xpaths = [
-        f"//*[@role='option']//*[@title='{option_text}']",
-        f"//*[@role='option']//*[normalize-space()='{option_text}']",
-        f"//*[@role='option' and normalize-space()='{option_text}']",
-        f"//*[contains(@class,'slds-listbox__option')]//*[@title='{option_text}']",
-        f"//*[contains(@class,'slds-listbox__option')]//*[normalize-space()='{option_text}']",
-        f"//lightning-base-combobox-item[.//*[@title='{option_text}']]",
-        f"//lightning-base-combobox-item[.//*[normalize-space()='{option_text}']]",
-    ]
-    for xp in xpaths:
+    for xp in [
+        f"//*[@role='option']//*[@title='{text}']",
+        f"//*[@role='option']//*[normalize-space()='{text}']",
+        f"//*[@role='option' and normalize-space()='{text}']",
+        f"//*[contains(@class,'slds-listbox__option')]//*[@title='{text}']",
+        f"//lightning-base-combobox-item[.//*[@title='{text}']]",
+        f"//lightning-base-combobox-item[.//*[normalize-space()='{text}']]",
+    ]:
         try:
-            opt = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((By.XPATH, xp)))
-            js_click(driver, opt)
-            print(f"    Selected: '{option_text}'")
-            time.sleep(0.7)
-            return
-        except TimeoutException:
-            continue
+            jclick(WebDriverWait(W, 8).until(EC.element_to_be_clickable((By.XPATH, xp))))
+            time.sleep(0.7); return
+        except TimeoutException: continue
+    with open(f"debug_{text[:20].replace(' ','_')}.html","w",encoding="utf-8") as f: f.write(W.page_source)
+    raise TimeoutException(f"Option not found: {text}")
 
-    save_debug_html(driver, f"option_{option_text}")
-    raise TimeoutException(f"Cannot find option '{option_text}'")
+def combo(label, text):
+    open_combo(label); pick(text)
 
-
-def select_combobox(driver, aria_label, option_text):
-    """Open a combobox and select an option."""
-    print(f"  [{aria_label}] → '{option_text}'")
-    open_combobox(driver, aria_label)
-    pick_option(driver, option_text)
-
-
-# ── Search & extraction ───────────────────────────────────────────────────────
-
-def click_search(driver, timeout=30):
-    """Click the Search button and wait briefly."""
-    btn = WebDriverWait(driver, timeout).until(
-        EC.element_to_be_clickable(
-            (By.XPATH, '//button[contains(@class,"slds-button_brand") and contains(.,"Search")]')
-        )
-    )
-    js_click(driver, btn)
+def search():
+    jclick(WebDriverWait(W, 30).until(EC.element_to_be_clickable(
+        (By.XPATH, '//button[contains(@class,"slds-button_brand") and contains(.,"Search")]'))))
     time.sleep(3)
 
-
-def extract_active_rows(driver, profession):
-    """
-    Extract rows from the results table where state is Wisconsin/WI and status is Active.
-    Returns a list of dicts with profession, link, and row_text.
-    """
-    results = []
-    for row in driver.find_elements(By.XPATH, "//table//tbody/tr"):
-        try:
-            row_text = row.text.strip()
-        except StaleElementReferenceException:
-            continue
-
-        if ("Wisconsin" not in row_text and "WI" not in row_text) or "Active" not in row_text:
-            continue
-
+def get_rows(prof):
+    rows = []
+    for row in W.find_elements(By.XPATH, "//table//tbody/tr"):
+        try: txt = row.text.strip()
+        except StaleElementReferenceException: continue
+        if ("Wisconsin" not in txt and "WI" not in txt) or "Active" not in txt: continue
         href = ""
-        for xpath in (
-            ".//a[contains(@href,'/s/') or contains(@href,'license')]",
-            ".//lightning-formatted-url//a",
-        ):
+        for xp in (".//a[contains(@href,'/s/') or contains(@href,'license')]", ".//lightning-formatted-url//a"):
             try:
-                href = row.find_element(By.XPATH, xpath).get_attribute("href") or ""
-                if href:
-                    break
-            except NoSuchElementException:
-                continue
+                href = row.find_element(By.XPATH, xp).get_attribute("href") or ""
+                if href: break
+            except NoSuchElementException: continue
+        rows.append({"profession": prof, "link": urljoin(URL, href) if href else "", "row_text": txt})
+    return rows
 
-        results.append({
-            "profession": profession,
-            "link": urljoin(URL, href) if href else "",
-            "row_text": row_text,
-        })
-    return results
-
-
-# ── Pagination ────────────────────────────────────────────────────────────────
-
-def get_total_pages(driver):
-    """Return total page count from the page-selector dropdown (default 1)."""
+def total_pages():
     try:
-        sel = driver.find_element(By.XPATH, "//select[contains(@class,'page-selector')]")
+        sel = W.find_element(By.XPATH, "//select[contains(@class,'page-selector')]")
         return len(sel.find_elements(By.TAG_NAME, "option"))
-    except NoSuchElementException:
-        return 1
+    except NoSuchElementException: return 1
 
-
-def go_to_page(driver, page_number):
-    """Navigate to a specific page via the page-selector dropdown."""
+def goto_page(n):
     try:
-        sel = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//select[contains(@class,'page-selector')]"))
-        )
-        Select(sel).select_by_value(str(page_number))
-        time.sleep(3)
-        wait_for_table(driver)
-        return True
-    except (TimeoutException, NoSuchElementException):
-        return False
+        sel = WebDriverWait(W, 10).until(EC.presence_of_element_located(
+            (By.XPATH, "//select[contains(@class,'page-selector')]")))
+        Select(sel).select_by_value(str(n)); time.sleep(3); wait_table(); return True
+    except (TimeoutException, NoSuchElementException): return False
 
-
-# ── Per-profession scrape ─────────────────────────────────────────────────────
-
-def scrape_profession(driver, profession):
-    """Scrape all pages for the current search result and return deduplicated rows."""
-    collected, seen = [], set()
-
-    wait_for_table(driver)
-
-    if driver.find_elements(By.XPATH, "//*[contains(text(),'No results') or contains(text(),'No records')]"):
-        print(f"  No results for: {profession}")
-        return collected
-
-    total_pages = get_total_pages(driver)
-    print(f"  Pages: {total_pages}")
-
-    for page in range(1, total_pages + 1):
-        if page > 1 and not go_to_page(driver, page):
-            print(f"  Could not navigate to page {page}, stopping.")
-            break
-
-        wait_for_table(driver)
-
-        for item in extract_active_rows(driver, profession):
-            key = item["link"] or item["row_text"]
-            if key not in seen:
-                seen.add(key)
-                collected.append(item)
-
-        print(f"  Page {page}/{total_pages} | total so far: {len(collected)}")
-
+def scrape(prof):
+    wait_table()
+    if W.find_elements(By.XPATH, "//*[contains(text(),'No results') or contains(text(),'No records')]"):
+        return []
+    pages, collected, seen = total_pages(), [], set()
+    for p in range(1, pages + 1):
+        if p > 1 and not goto_page(p): break
+        wait_table()
+        for item in get_rows(prof):
+            k = item["link"] or item["row_text"]
+            if k not in seen: seen.add(k); collected.append(item)
+        print(f"  p{p}/{pages} | {len(collected)} total")
     return collected
 
-
-# ── CSV ───────────────────────────────────────────────────────────────────────
-
-def save_csv(rows, output_file):
-    with open(output_file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["profession", "link", "row_text"])
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
+def save(rows):
+    with open(OUT, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["profession","link","row_text"])
+        w.writeheader(); w.writerows(rows)
 
 def main():
-    clear_wdm_lock()
+    global W
+    lock = os.path.join(os.path.expanduser("~"), ".wdm", ".wdm-lock-chromedriver-win64")
+    if os.path.exists(lock):
+        try: os.remove(lock)
+        except OSError: pass
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=webdriver.ChromeOptions(),
-    )
-    driver.maximize_window()
-
-    all_results = []
+    W = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=webdriver.ChromeOptions())
+    W.maximize_window()
+    all_rows = []
 
     try:
-        driver.get(URL)
-
-        # Wait for Salesforce LWC to fully render
-        WebDriverWait(driver, 40).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        W.get(URL)
+        WebDriverWait(W, 40).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
         time.sleep(8)
-        WebDriverWait(driver, 40).until(
-            EC.presence_of_element_located((By.XPATH, "//button[@role='combobox']"))
-        )
+        WebDriverWait(W, 40).until(EC.presence_of_element_located((By.XPATH, "//button[@role='combobox']")))
         time.sleep(2)
 
-        # Set fixed filters once
-        select_combobox(driver, "Search By", "Individual Name")
-        time.sleep(1)
+        combo("Search By", "Individual Name"); time.sleep(1)
+        combo("Category", "Health"); time.sleep(1)
 
-        # Print available category options for reference
-        open_combobox(driver, "Category")
-        try:
-            WebDriverWait(driver, 10).until(
-                lambda d: d.find_elements(By.XPATH, "//*[@role='option']")
-            )
-            time.sleep(0.5)
-            opts = [o.get_attribute("title") for o in driver.find_elements(By.XPATH, "//*[@role='option']//*[@title]")]
-            print("Category options:", opts)
-        except TimeoutException:
-            pass
-
-        pick_option(driver, "Health")
-        time.sleep(1)
-
-        # Loop through each profession
-        for profession in PROFESSIONS:
-            print(f"\n{'='*60}\nProfession: {profession}\n{'='*60}")
+        for prof in PROFESSIONS:
+            print(f"\n--- {prof} ---")
             try:
-                select_combobox(driver, "Professions", profession)
-                time.sleep(0.5)
-                click_search(driver)
-
-                results = scrape_profession(driver, profession)
-                all_results.extend(results)
-                save_csv(all_results, OUTPUT_CSV)  # incremental save
-
-                print(f"  Done: {len(results)} found | total: {len(all_results)}")
-
+                combo("Professions", prof); time.sleep(0.5)
+                search()
+                rows = scrape(prof)
+                all_rows.extend(rows); save(all_rows)
+                print(f"  {len(rows)} found | {len(all_rows)} total")
             except Exception as e:
-                print(f"  ERROR for '{profession}': {e}")
-                save_debug_html(driver, f"error_{profession[:20]}")
-
+                print(f"  ERROR: {e}")
+                with open(f"debug_err_{prof[:15].replace(' ','_')}.html","w",encoding="utf-8") as f: f.write(W.page_source)
     finally:
-        save_csv(all_results, OUTPUT_CSV)
-        driver.quit()
+        save(all_rows); W.quit()
 
-    print(f"\nFinished. {len(all_results)} records saved to {OUTPUT_CSV}")
-
+    print(f"\nDone. {len(all_rows)} records → {OUT}")
 
 if __name__ == "__main__":
     main()
